@@ -14,7 +14,7 @@ STRATEGIES = {
 REPORT_PATH = 'results/confluence_report.csv'
 HISTORY_DIR = 'history'
 HISTORY_FILE = os.path.join(HISTORY_DIR, 'resonance_history.csv')
-STATS_FILE = os.path.join(HISTORY_DIR, 'overall_stats.txt') # 用于保存累计收益
+STATS_FILE = os.path.join(HISTORY_DIR, 'overall_stats.txt')
 
 # 操作指南
 OPERATIONS = {
@@ -25,12 +25,10 @@ OPERATIONS = {
 }
 
 def get_latest_file(folder):
-    """获取文件夹内最新的CSV文件"""
     files = glob.glob(f"{folder}/*.csv")
     return max(files) if files else None
 
 def get_total_gain():
-    """从本地读取累计收益率"""
     if os.path.exists(STATS_FILE):
         with open(STATS_FILE, 'r') as f:
             try:
@@ -40,14 +38,44 @@ def get_total_gain():
     return 0.0
 
 def save_total_gain(gain):
-    """保存更新后的累计收益率"""
     with open(STATS_FILE, 'w') as f:
         f.write(f"{gain:.2f}")
 
+def generate_daily_reports(df, total_gain, perf_msg, date_str):
+    """生成带日期的 Markdown 和 CSV 备份"""
+    # 1. 准备中文显示列
+    cn_df = df.copy()
+    columns_map = {
+        'date': '日期', 'code': '股票代码', 'name': '股票名称',
+        'strategy': '触发战法', 'price': '当前价格',
+        'resonance_count': '共振强度', 'action_guide': '操作指南'
+    }
+    cn_df = cn_df.rename(columns=columns_map)
+    display_cols = ['日期', '股票代码', '股票名称', '共振强度', '当前价格', '触发战法', '操作指南']
+    cn_df = cn_df[display_cols].sort_values(by='共振强度', ascending=False)
+
+    # 2. 生成当日 MD 报告 (confluence_hunter_YYYY-MM-DD.md)
+    md_filename = f"confluence_hunter_{date_str}.md"
+    md_path = os.path.join(HISTORY_DIR, md_filename)
+    
+    # 同时更新根目录的“显示方式.md”方便快速查看
+    root_md_path = "显示方式.md"
+    
+    md_content = f"# 🌊 共振精选报告 ({date_str})\n\n"
+    md_content += f"### 📈 战果复盘\n- {perf_msg}\n- 系统累计总收益率: `{total_gain:.2f}%` 🚀\n\n"
+    md_content += f"### 💎 今日精选 (3重共振优先)\n"
+    md_content += cn_df.to_markdown(index=False)
+    
+    for path in [md_path, root_md_path]:
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(md_content)
+
+    # 3. 生成当日独立 CSV 备份 (confluence_hunter_history_YYYY-MM-DD.csv)
+    csv_backup_path = os.path.join(HISTORY_DIR, f"confluence_hunter_history_{date_str}.csv")
+    df.to_csv(csv_backup_path, index=False, encoding='utf-8-sig')
+
 def main():
     all_picks = []
-    
-    # 1. 汇总今日各战法结果
     for name, path in STRATEGIES.items():
         latest = get_latest_file(path)
         if latest:
@@ -65,10 +93,9 @@ def main():
             except: continue
 
     if not all_picks:
-        print("今日无选股结果，跳过分析。")
+        print("今日无选股结果。")
         return
 
-    # 2. 生成今日共振报告
     df_all = pd.DataFrame(all_picks)
     today_report = df_all.groupby(['date', 'code', 'name']).agg({
         'strategy': lambda x: ','.join(x),
@@ -76,15 +103,12 @@ def main():
     }).reset_index()
     
     today_report['resonance_count'] = today_report['strategy'].apply(lambda x: len(x.split(',')))
-    
-    def get_guide(strategies):
-        guides = [f"[{s}]: {OPERATIONS.get(s, '')}" for s in strategies.split(',')]
-        return " | ".join(guides)
-    
-    today_report['action_guide'] = today_report['strategy'].apply(get_guide)
+    today_report['action_guide'] = today_report['strategy'].apply(
+        lambda x: " | ".join([f"[{s}]: {OPERATIONS.get(s, '')}" for s in x.split(',')])
+    )
     today_report = today_report.sort_values(by=['resonance_count', 'code'], ascending=[False, True])
 
-    # 3. 战果统计 (复盘昨日) & 累计收益计算
+    # 收益统计
     os.makedirs(HISTORY_DIR, exist_ok=True)
     performance_msg = "首次运行或今日无新对账数据。"
     total_gain = get_total_gain()
@@ -98,42 +122,26 @@ def main():
                 merged = pd.merge(last_picks, today_report[['code', 'price']], on='code', suffixes=('_old', '_now'))
                 if not merged.empty:
                     merged['gain'] = ((merged['price_now'] - merged['price_old']) / merged['price_old'] * 100).round(2)
-                    avg_gain = merged['gain'].mean()
-                    win_rate = (len(merged[merged['gain'] > 0]) / len(merged)) * 100
-                    # 更新累计总收益
-                    total_gain += avg_gain
+                    total_gain += merged['gain'].mean()
                     save_total_gain(total_gain)
-                    performance_msg = f"昨日精选今日平均涨幅: {avg_gain:.2f}% | 胜率: {win_rate:.1f}%"
+                    performance_msg = f"昨日精选今日平均涨幅: {merged['gain'].mean():.2f}%"
 
-    # 4. 更新历史总账 (建立错题集)
+    # 1. 更新总账本 (resonance_history.csv)
     if os.path.exists(HISTORY_FILE):
-        full_history = pd.read_csv(HISTORY_FILE, dtype={'code': str})
-        # 避免当天多次运行重复记录
-        full_history = full_history[full_history['date'] != today_report['date'].iloc[0]]
-        full_history = pd.concat([full_history, today_report], ignore_index=True)
+        full_hist = pd.read_csv(HISTORY_FILE, dtype={'code': str})
+        full_hist = pd.concat([full_hist[full_hist['date'] != today_report['date'].iloc[0]], today_report], ignore_index=True)
     else:
-        full_history = today_report
-    full_history.to_csv(HISTORY_FILE, index=False, encoding='utf-8-sig')
+        full_hist = today_report
+    full_hist.to_csv(HISTORY_FILE, index=False, encoding='utf-8-sig')
 
-    # 5. 保存今日精选到 results/
+    # 2. 生成带日期后缀的备份文件 (.md 和 .csv)
+    date_str = today_report['date'].iloc[0]
+    generate_daily_reports(today_report, total_gain, performance_msg, date_str)
+
+    # 3. 保存最新结果到 results
     today_report.to_csv(REPORT_PATH, index=False, encoding='utf-8-sig')
 
-    # 6. 控制台汇报
-    print("\n" + "="*50)
-    print(f"  📊 大海捞鱼 - 自动化复盘报告 ({today_report['date'].iloc[0]})")
-    print(f"  📈 {performance_msg}")
-    print(f"  🏆 系统上线以来累计总收益率: {total_gain:.2f}%")
-    print("="*50)
-    
-    top_v = today_report[today_report['resonance_count'] >= 3]
-    if not top_v.empty:
-        print(f"💎 今日【核心共振】(3重以上):")
-        for _, r in top_v.iterrows():
-            print(f" >> {r['code']} | {r['name']} | 现价: {r['price']} | 战法: {r['strategy']}")
-    
-    print(f"🔥 今日 2 重共振标的: {len(today_report[today_report['resonance_count'] == 2])} 只")
-    print(f"📂 历史错题集(对账单): {HISTORY_FILE}")
-    print("="*50 + "\n")
+    print(f"✅ 报告已更新：{date_str} | 累计收益: {total_gain:.2f}%")
 
 if __name__ == "__main__":
     main()
