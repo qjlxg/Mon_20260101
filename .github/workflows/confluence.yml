@@ -6,7 +6,7 @@ on:
       - '.github/workflows/confluence.yml'
       - 'results/**'
   schedule:
-    - cron: '45 08 * * *' # 北京时间 16:45
+    - cron: '45 08 * * *'
   workflow_dispatch:
 
 permissions:
@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          fetch-depth: 1 
+          fetch-depth: 1
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -26,31 +26,27 @@ jobs:
           python-version: '3.9'
 
       - name: Install dependencies
-        run: pip install pandas
+        run: pip install pandas jinja2 tabulate # 确保支持 MD 表格转换
 
-      - name: Run Confluence and Backtest
+      - name: Run Analysis
         run: python confluence_hunter.py
 
-      - name: Commit and Push Results
+      - name: Commit and Push All Changes
         run: |
           git config --local user.email "bot@github.com"
           git config --local user.name "ConfluenceBot"
           
-          # 确保目录存在
-          mkdir -p results history
+          # 确保所有目录和新生成的文件都被追踪
+          git add results/*.csv
+          git add history/*.csv
+          git add history/*.md
+          git add history/*.txt
+          git add 显示方式.md
           
-          # 强制更新隐藏文件
-          touch history/.last_run
-          
-          # 使用文件夹模式 add，避免因单个文件不存在导致的 pathspec 错误
-          git add results/
-          git add history/
-          
-          # 检查暂存区是否有任何变化
           if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Auto: Report & Cumulative Gain Update $(date +'%Y-%m-%d %H:%M')"
+            git commit -m "Auto: Daily Backup & Report $(date +'%Y-%m-%d')"
             git pull --rebase origin main
             git push origin main
           else
-            echo "No changes to commit."
+            echo "No changes found."
           fi
