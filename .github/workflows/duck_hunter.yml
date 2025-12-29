@@ -1,0 +1,40 @@
+name: duck_hunter
+
+on:
+  push:
+    paths:
+      - 'duck_hunter.py'
+      - '.github/workflows/duck_hunter.yml'
+  schedule:
+    - cron: '10 08 * * *' # 北京时间 16:10
+  workflow_dispatch:
+
+jobs:
+  filter_job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Pandas
+        run: pip install pandas
+
+      - name: Run Duck Hunter Script
+        run: python duck_hunter.py
+
+      - name: Commit and Push Results
+        run: |
+          git config --local user.email "duck-hunter-bot@github.com"
+          git config --local user.name "DuckHunterBot"
+          git add results/
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Auto-update duck hunter results: $(date +'%Y-%m-%d %H:%M:%S')"
+            git push
+          else
+            echo "Nothing to commit today"
+          fi
