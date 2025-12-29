@@ -18,6 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
+          # 按照要求修改为 1，只拉取最新提交，提升效率
           fetch-depth: 1 
 
       - name: Set up Python
@@ -36,15 +37,21 @@ jobs:
           git config --local user.email "bot@github.com"
           git config --local user.name "ConfluenceBot"
           
+          # 确保目录存在
           mkdir -p results history
           
-          # 将结果、历史记录以及收益统计文件全部加入
-          git add results/ history/
+          # 强制更新一个隐藏文件，确保 Git 每次都能检测到变化并提交
+          touch history/.last_run
           
+          # 添加所有相关文件
+          git add results/confluence_report.csv history/resonance_history.csv history/overall_stats.txt history/.last_run
+          
+          # 检查是否有变化
           if [ -n "$(git status --porcelain)" ]; then
             git commit -m "Auto: Report & Cumulative Gain Update $(date +'%Y-%m-%d %H:%M')"
+            # 浅克隆下使用 pull --rebase 保持线性历史
             git pull --rebase origin main
             git push origin main
           else
-            echo "No changes detected."
+            echo "No changes to commit."
           fi
