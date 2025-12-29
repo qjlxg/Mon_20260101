@@ -1,0 +1,37 @@
+name: stock_filter
+
+on:
+  push:
+    paths:
+      - 'stock_filter.py'
+      - '.github/workflows/stock_filter.yml'
+  schedule:
+    - cron: '10 08 * * *' # UTC 08:10 是北京时间 16:10
+  workflow_dispatch:      # 支持手动运行
+
+jobs:
+  filter:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: |
+          pip install pandas
+
+      - name: Run Script
+        run: python stock_filter.py
+
+      - name: Commit and Push Results
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add results/
+          # 只有在有新文件时才提交，防止报错
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto: Update selection $(date +'%Y-%m-%d %H:%M:%S')" && git push)
