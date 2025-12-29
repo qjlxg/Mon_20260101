@@ -1,0 +1,34 @@
+name: Strategy_GoldenPit
+on:
+  push:
+    paths:
+      - 'golden_pit.py'
+      - '.github/workflows/golden_pit.yml'
+  schedule:
+    - cron: '18 08 * * *' # UTC 08:18 = 北京时间 16:18
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run_strategy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - run: pip install pandas
+      - name: Execute Script
+        run: python golden_pit.py
+      - name: Commit and Push
+        run: |
+          git config --local user.email "bot@github.com"
+          git config --local user.name "StrategyBot"
+          git add results/
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Auto-update: GoldenPit Results $(date +'%Y-%m-%d')"
+            git push
+          fi
