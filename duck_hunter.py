@@ -8,14 +8,14 @@ import re
 # 配置常量
 DATA_DIR = 'stock_data'
 NAMES_FILE = 'stock_names.csv'
-OUTPUT_BASE = 'results'
+OUTPUT_BASE = 'results' # 基础目录保持不变
 
 def analyze_logic(file_path):
     try:
         # 1. 加载数据
         df = pd.read_csv(file_path)
         
-        # 【过滤1：排除次新股】要求上市时间超过180个交易日，确保均线系统稳定
+        # 【过滤1：排除次新股】要求上市时间超过180个交易日
         if len(df) < 180: return None
         
         # 表头映射
@@ -39,7 +39,7 @@ def analyze_logic(file_path):
         
         # 【过滤2：强势突破基因】当日涨幅 >= 3.0%
         cond_strong = curr['pct_chg'] >= 3.0
-        # 【过滤3：换手活跃度】换手率 > 3.0%，排除僵尸股/老庄股
+        # 【过滤3：换手活跃度】换手率 > 3.0%
         cond_active = curr['turnover'] > 3.0
         
         if not (cond_strong and cond_active):
@@ -66,7 +66,7 @@ def analyze_logic(file_path):
 
         # --- 分级判定逻辑 ---
         
-        # 【A级：基础强势】均线多头 + 趋势向上 + (放量或回踩)
+        # 【A级：基础强势】
         cond_basic_trend = curr['close'] > curr['ma5'] > curr['ma10']
         cond_basic_slope = curr['ma5'] > prev['ma5']
         cond_basic_vol = (curr['volume'] > curr['vol_ma5'] * 1.2) or (curr['close'] >= curr['ma10'] and curr['volume'] <= curr['vol_ma5'])
@@ -76,7 +76,7 @@ def analyze_logic(file_path):
         
         level = "A"
 
-        # 【AA级：标准形态】MA60趋势向上 + MACD红柱增长
+        # 【AA级：标准形态】
         cond_aa_trend = curr['ma60'] > df.iloc[-5]['ma60']
         cond_aa_macd = curr['macd'] > prev['macd']
         
@@ -84,11 +84,8 @@ def analyze_logic(file_path):
             level = "AA"
 
             # 【AAA级：极品老鸭头】
-            # 1. 鸭头顶高度放宽：前期最高 > MA60 * 1.08
             cond_aaa_head = recent_20['high'].max() > curr['ma60'] * 1.08
-            # 2. 鸭鼻孔地量：近期出现过缩量洗盘 (< 60日均量的0.8倍)
             cond_aaa_nostril = recent_10['volume'].min() < curr['vol_ma60'] * 0.8
-            # 3. MACD水上：DIF在零轴上方
             cond_aaa_water = curr['dif'] > 0
             
             if cond_aaa_head and cond_aaa_nostril and cond_aaa_water:
@@ -131,25 +128,27 @@ def main():
         name_dict = names_df.set_index(names_df['code'].apply(lambda x: x.zfill(6)))['name'].to_dict()
         res_df['name'] = res_df['code'].map(name_dict)
         
-        # 排序逻辑：等级 > 涨幅
+        # 排序逻辑
         res_df = res_df.sort_values(by=['level', 'pct_chg'], ascending=[False, False])
         
+        # --- 路径修改：统一保存到 results/duck_hunter/ ---
         now = datetime.now()
-        dir_path = os.path.join(OUTPUT_BASE, now.strftime('%Y%m'))
+        dir_path = os.path.join(OUTPUT_BASE, 'duck_hunter') # 锁定子目录名
         os.makedirs(dir_path, exist_ok=True)
-        save_path = os.path.join(dir_path, f"duck_hunter_{now.strftime('%Y%m%d_%H%M%S')}.csv")
+        
+        # 文件名保持日期唯一，方便共振分析脚本检索最新文件
+        save_path = os.path.join(dir_path, f"duck_hunter_{now.strftime('%Y%m%d')}.csv")
         
         final_cols = ['filter_date', 'code', 'name', 'level', 'price', 'pct_chg', 'turnover', 'vol_ratio']
-        res_df[final_cols].to_csv(save_path, index=False)
+        res_df[final_cols].to_csv(save_path, index=False, encoding='utf-8-sig') # 增加编码防止乱码
         
         counts = res_df['level'].value_counts()
         print("-" * 50)
         print(f"筛选日期: {res_df['filter_date'].iloc[0]}")
-        print(f"满足条件: 涨幅≥3%, 换手>3%, 上市>180天")
         print(f"总计入选: {len(res_df)} 只")
         print(f"AAA 级 (极品老鸭): {counts.get('AAA', 0)} 只")
         print(f"AA  级 (标准形态): {counts.get('AA', 0)} 只")
-        print(f"A   级 (基础强势): {counts.get('A', 0)} 只")
+        print(f"A    级 (基础强势): {counts.get('A', 0)} 只")
         print(f"保存路径: {save_path}")
         print("-" * 50)
     else:
