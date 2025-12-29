@@ -8,97 +8,90 @@ DATA_DIR = 'stock_data'
 OUTPUT_DIR = 'results/yin_line_strategy'
 
 class YinLineStrategy:
-    """基于上传图片的阴线买入战法"""
+    """严格执行图片逻辑的阴线买入战法"""
     
     @staticmethod
     def prepare_indicators(df):
         df = df.copy()
-        # 核心均线
         for m in [5, 10, 20, 60]:
             df[f'ma{m}'] = df['close'].rolling(m).mean()
-        # 5日平均成交量
-        df['v_ma5'] = df['volume'].rolling(5).mean()
+        # 5日平均成交量 (用于缩量判断)
+        df['v_ma5_avg'] = df['volume'].shift(1).rolling(5).mean()
         return df
 
     @staticmethod
-    def is_uptrend(df):
-        """原则一：趋势为王，股价必须在60日线之上且60日线向上"""
+    def check_rules(df):
         curr = df.iloc[-1]
         prev = df.iloc[-2]
-        return curr['close'] > curr['ma60'] and curr['ma60'] > prev['ma60']
+        
+        # 基础准则：趋势为王 (股价在60日线上，且60日线向上)
+        if not (curr['close'] > curr['ma60'] and curr['ma60'] > prev['ma60']):
+            return None
 
-    @staticmethod
-    def logic_shrink_volume(df):
-        """第一种：缩量回调阴线"""
-        curr = df.iloc[-1]
-        # 条件：阴线且收盘在5/10日线上，成交量小于5日均量50%
-        is_yin = curr['close'] < curr['open']
-        is_above_ma = curr['close'] > curr['ma5'] and curr['close'] > curr['ma10']
-        is_shrink = curr['volume'] < (df.iloc[-6:-1]['volume'].mean() * 0.5)
-        return is_yin and is_above_ma and is_shrink
+        # 避坑指南：日成交额 > 1亿
+        if (curr['close'] * curr['volume']) < 100000000:
+            return None
 
-    @staticmethod
-    def logic_ma_touch(df):
-        """第二种：回踩均线阴线"""
-        curr = df.iloc[-1]
         is_yin = curr['close'] < curr['open']
-        # 接近均线（1%范围内）且未跌破
-        touch = False
-        for m in [5, 10, 20, 60]:
-            ma_val = curr[f'ma{m}']
-            if 0 <= (curr['close'] - ma_val) / ma_val <= 0.01:
-                touch = True
-                break
-        return is_yin and touch
+        signals = []
 
-    @staticmethod
-    def logic_fake_yin(df):
-        """第三种：放量假阴线（主力洗盘）"""
-        curr = df.iloc[-1]
-        prev = df.iloc[-2]
-        # 条件：阴线，但开盘价高于前收，收盘接近最高价
-        is_yin = curr['close'] < curr['open']
-        is_higher_open = curr['open'] > prev['close']
-        is_near_high = (curr['high'] - curr['close']) / curr['close'] < 0.005
-        # 成交量放大到前一天的1.5倍以上
-        is_vol_burst = curr['volume'] > prev['volume'] * 1.5
-        return is_yin and is_higher_open and is_near_high and is_vol_burst
+        # 1. 缩量回调阴线
+        # 条件：股价在5/10日线上，且成交量 < 前5日均量的50%
+        if is_yin and curr['close'] > curr['ma5'] and curr['close'] > curr['ma10']:
+            if curr['volume'] < (curr['v_ma5_avg'] * 0.5):
+                signals.append("缩量回调")
+
+        # 2. 回踩均线阴线
+        # 条件：均线向上走，回调不破均线 (MA5/10/20均可)
+        if is_yin:
+            for m in [5, 10, 20]:
+                if curr[f'ma{m}'] > prev[f'ma{m}']: # 均线向上
+                    if curr['low'] <= curr[f'ma{m}'] and curr['close'] >= curr[f'ma{m}']:
+                        signals.append(f"回踩MA{m}")
+                        break
+
+        # 3. 放量假阴线
+        # 条件：开盘和收盘都比前收高，成交量放大大1.5倍以上
+        if is_yin and curr['open'] > prev['close'] and curr['close'] > prev['close']:
+            if curr['volume'] > (prev['volume'] * 1.5):
+                # 接近当天最高价 (洗盘陷阱核心)
+                if (curr['high'] - curr['close']) / curr['close'] < 0.01:
+                    signals.append("放量假阴线")
+
+        return "+".join(signals) if signals else None
 
 def run_strategy():
     if not os.path.exists(OUTPUT_DIR): os.makedirs(OUTPUT_DIR)
     results = []
     
+    # 模拟大盘环境检查 (原则三：大盘大跌不买)
+    # 这里假设你可以获取指数数据，若无则跳过，此处演示逻辑
+    market_crash = False 
+    if market_crash: return
+
     for f in os.listdir(DATA_DIR):
         if not f.endswith('.csv'): continue
         try:
             df = pd.read_csv(os.path.join(DATA_DIR, f))
             if len(df) < 60: continue
             
-            # 基础过滤：成交额 > 1亿 (避坑指南第2条)
-            if (df['close'].iloc[-1] * df['volume'].iloc[-1]) < 100000000: continue
-            
             df = YinLineStrategy.prepare_indicators(df)
-            if not YinLineStrategy.is_uptrend(df): continue
+            match_type = YinLineStrategy.check_rules(df)
             
-            code = f.replace('.csv', '')
-            match = []
-            if YinLineStrategy.logic_shrink_volume(df): match.append("缩量回调")
-            if YinLineStrategy.logic_ma_touch(df): match.append("回踩均线")
-            if YinLineStrategy.logic_fake_yin(df): match.append("放量假阴线")
-            
-            if match:
+            if match_type:
                 results.append({
-                    'code': code,
-                    'type': "+".join(match),
-                    'price': df['close'].iloc[-1],
-                    'date': datetime.now().strftime('%Y-%m-%d')
+                    '代码': f.replace('.csv', ''),
+                    '形态类型': match_type,
+                    '收盘价': df['close'].iloc[-1],
+                    '成交额(万)': round((df['close'].iloc[-1] * df['volume'].iloc[-1])/10000, 2),
+                    '日期': datetime.now().strftime('%Y-%m-%d')
                 })
         except: continue
 
-    res_df = pd.DataFrame(results)
-    if not res_df.empty:
+    if results:
+        res_df = pd.DataFrame(results)
         res_df.to_csv(f"{OUTPUT_DIR}/yin_signals_{datetime.now().strftime('%Y-%m-%d')}.csv", index=False, encoding='utf-8-sig')
-        print(f"成功筛选出 {len(res_df)} 个阴线买入信号")
+        print(f"🔥 发现 {len(res_df)} 个符合图片战法的目标")
 
 if __name__ == "__main__":
     run_strategy()
