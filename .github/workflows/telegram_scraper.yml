@@ -1,0 +1,40 @@
+name: telegram_scraper
+
+on:
+  workflow_dispatch: # 支持手动运行
+  push:
+    paths:
+      - 'telegram_scraper.py'
+      - '.github/workflows/telegram_scraper.yml'
+  schedule:
+    - cron: '0 0,12 * * *' # 每天北京时间 8:00 和 20:00 自动运行
+
+jobs:
+  scrape_and_push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 安装依赖
+        run: |
+          pip install requests beautifulsoup4 easyocr torch torchvision
+
+      - name: 执行抓取脚本
+        run: python telegram_scraper.py
+
+      - name: 推送结果到仓库
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add README.md history/
+          # 只有在有变动时才提交，防止报错
+          git diff --quiet && git diff --staged --quiet || (git commit -m "自动更新: $(date -d '8 hours' +'%Y-%m-%d %H:%M:%S')" && git push)
