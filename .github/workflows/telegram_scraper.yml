@@ -1,46 +1,48 @@
 name: telegram_scraper
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # 支持手动点击按钮运行
   push:
     paths:
       - 'telegram_scraper.py'
-      - '.github/workflows/telegram_scraper.yml'
+      - '.github/workflows/telegram_scraper.yml' # 自身变动也触发
   schedule:
-    - cron: '0 0,4,8,12,16 * * *' # 对应北京时间 8:00, 12:00, 16:00, 20:00, 0:00
+    - cron: '0 0,4,8,12,16 * * *' # 每4小时自动运行 (北京时间 8:00, 12:00 等)
 
 jobs:
-  run_job:
+  execute_task:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # 必须开启写入权限以推送 README
 
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: 设置 Python
+      - name: 设置 Python 环境
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: 安装系统与 Python 依赖
-        # 直接在此处列出所有库，不依赖外部 txt 文件
+      - name: 安装系统依赖和 Python 库
+        # 这里直接安装所有依赖，不使用 requirements.txt
         run: |
           sudo apt-get update
           sudo apt-get install -y libgl1 libglib2.0-0
           pip install requests beautifulsoup4 easyocr torch torchvision --extra-index-url https://download.pytorch.org/whl/cpu
 
-      - name: 运行脚本
+      - name: 运行爬虫脚本
         run: python telegram_scraper.py
 
-      - name: 提交更新
+      - name: 推送更新到仓库
         run: |
-          git config --local user.email "bot@github.com"
-          git config --local user.name "AutoBot"
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
           git add README.md history/
-          # 仅在有变动时提交
+          # 检查是否有内容变更，避免产生空提交报错
           if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Auto sync $(date -d '8 hours' +'%Y-%m-%d %H:%M')"
+            git commit -m "Auto Update: $(date -d '8 hours' +'%Y-%m-%d %H:%M:%S')"
             git push
+          else
+            echo "No changes detected, skipping commit."
           fi
