@@ -6,8 +6,9 @@ from datetime import datetime
 # --- 配置区 ---
 RESULTS_DIR = 'results'
 REPORT_DIR = 'reports'
-# 战法名称翻译（对应你的 16 个文件夹名）
-STRATEGY_NAMES = {
+
+# 16个战法目录与中文名称的对应关系
+STRATEGY_MAP = {
     'macd_bottom': 'MACD抄底',
     'duck_head': '老鸭头',
     'three_in_one': '三位一体',
@@ -26,82 +27,85 @@ STRATEGY_NAMES = {
     'inst_swing': '机构波段'
 }
 
-def run_confluence_analysis():
+def run_confluence_hunter():
+    # 获取今天的日期字符串
     date_str = datetime.now().strftime('%Y-%m-%d')
-    all_picks = []
+    all_data = []
 
-    # 1. 扫描结果文件夹
-    if not os.path.exists(RESULTS_DIR):
-        print("未发现 results 目录，请先运行战法引擎。")
-        return
+    print(f"开始汇总 {date_str} 的 16 战法筛选结果...")
 
-    print(f"正在分析 {date_str} 的战法共振情况...")
-
-    # 2. 读取每个战法产出的最新 CSV
-    for folder_name, chinese_name in STRATEGY_NAMES.items():
-        folder_path = os.path.join(RESULTS_DIR, folder_name)
+    # 1. 遍历 16 个战法文件夹
+    for s_key, s_name in STRATEGY_MAP.items():
+        folder_path = os.path.join(RESULTS_DIR, s_key)
         if not os.path.exists(folder_path):
             continue
             
-        # 寻找当天的文件
-        pattern = os.path.join(folder_path, f"{folder_name}_{date_str}.csv")
-        files = glob.glob(pattern)
+        # 查找当天的结果文件，例如：results/macd_bottom/macd_bottom_2025-12-29.csv
+        file_pattern = os.path.join(folder_path, f"{s_key}_{date_str}.csv")
+        target_files = glob.glob(file_pattern)
         
-        for f in files:
+        for f in target_files:
             try:
                 df = pd.read_csv(f, dtype={'code': str})
-                if df.empty: continue
-                # 记录每只股票属于哪个战法
-                df['strategy'] = chinese_name
-                all_picks.append(df)
+                if df.empty:
+                    continue
+                # 标记该股票所属的战法名称
+                df['match_strategy'] = s_name
+                all_data.append(df)
             except Exception as e:
-                print(f"读取 {f} 出错: {e}")
+                print(f"读取文件 {f} 出错: {e}")
 
-    if not all_picks:
-        print("今日无任何战法选出股票。")
+    # 2. 如果没有选出任何股票，直接退出
+    if not all_data:
+        print(f"今日 ({date_str}) 16 个战法均未选出目标。")
         return
 
-    # 3. 合并所有结果
-    full_df = pd.concat(all_picks, ignore_index=True)
+    # 3. 合并所有战法选出的股票
+    full_df = pd.concat(all_data, ignore_index=True)
 
-    # 4. 计算共振强度 (Confluence Count)
-    # 按代码和名称分组，统计出现了多少次
-    confluence = full_df.groupby(['code', 'name']).agg({
-        'strategy': lambda x: ' + '.join(list(x)),
-        'price': 'last'
+    # 4. 核心逻辑：统计每只股票出现的次数（共振强度）
+    # 分组统计：代码、名称、价格
+    summary = full_df.groupby(['code', 'name']).agg({
+        'match_strategy': lambda x: ' + '.join(list(x)), # 合并所有命中的战法名
+        'price': 'last' # 记录价格
     }).reset_index()
-    
-    confluence['count'] = confluence['strategy'].apply(lambda x: len(x.split(' + ')))
-    
-    # 按共振次数降序排列
-    confluence = confluence.sort_values(by='count', ascending=False)
-    confluence.rename(columns={'strategy': '命中战法', 'count': '共振强度', 'price': '收盘价', 'code': '代码', 'name': '名称'}, inplace=True)
 
-    # 5. 保存结果
+    # 计算共振次数
+    summary['count'] = summary['match_strategy'].apply(lambda x: len(x.split(' + ')))
+    
+    # 按共振强度从高到低排序
+    summary = summary.sort_values(by='count', ascending=False)
+    
+    # 重命名列名以便阅读
+    summary.columns = ['股票代码', '股票名称', '命中战法汇总', '最新价', '共振强度']
+
+    # 5. 保存汇总结果
     if not os.path.exists(REPORT_DIR):
         os.makedirs(REPORT_DIR)
 
-    # 保存 CSV
-    csv_path = os.path.join(REPORT_DIR, f"confluence_{date_str}.csv")
-    confluence.to_csv(csv_path, index=False, encoding='utf-8-sig')
+    # 保存为 CSV 方便下载
+    csv_output = os.path.join(REPORT_DIR, f"confluence_{date_str}.csv")
+    summary.to_csv(csv_output, index=False, encoding='utf-8-sig')
 
-    # 6. 生成 Markdown 复盘报告 (美化版)
-    md_path = os.path.join(REPORT_DIR, f"report_{date_str}.md")
-    with open(md_path, 'w', encoding='utf-8') as f:
-        f.write(f"# 16战法共振复盘报告 ({date_str})\n\n")
-        f.write(f"> 自动化系统已完成全市场扫描。今日共选出 **{len(confluence)}** 只目标股。\n\n")
-        f.write("## 🏆 强共振候选 (2重及以上共振)\n\n")
+    # 6. 生成 Markdown 复盘报告
+    md_output = os.path.join(REPORT_DIR, f"report_{date_str}.md")
+    with open(md_output, 'w', encoding='utf-8') as f:
+        f.write(f"# 16 战法共振复盘报告 ({date_str})\n\n")
+        f.write(f"今日全市场扫描完成。共有 **{len(summary)}** 只股票入选战法池。\n\n")
         
-        strong = confluence[confluence['共振强度'] >= 2]
-        if not strong.empty:
-            f.write(strong.to_markdown(index=False))
+        # 提取多重共振的股票（共振强度 >= 2）
+        strong_signals = summary[summary['共振强度'] >= 2]
+        
+        f.write("## 🚀 强共振提醒 (多重战法指向)\n")
+        if not strong_signals.empty:
+            f.write(strong_signals.to_markdown(index=False))
         else:
-            f.write("今日暂无多重共振标的。")
+            f.write("今日暂无双重及以上共振的标的。\n")
             
-        f.write("\n\n## 🔍 全量选股清单\n\n")
-        f.write(confluence.to_markdown(index=False))
+        f.write("\n\n## 📋 全量入选清单 (按强度排序)\n")
+        f.write(summary.to_markdown(index=False))
 
-    print(f"✅ 分析完成！共振报告已生成至: {REPORT_DIR}")
+    print(f"✅ 汇总完成！共振报告已生成至: {md_output}")
 
 if __name__ == "__main__":
-    run_confluence_analysis()
+    run_confluence_hunter()
