@@ -1,0 +1,67 @@
+name: 🔄 极致
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'stock_scanner_go.py' 
+      - '.github/workflows/stock_scanner_go.yml'
+  schedule:
+    - cron: '0 10 * * *' 
+
+permissions:
+  contents: write
+
+jobs:
+  run_scanner:
+    timeout-minutes: 60 
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ 检出代码
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1 
+
+      - name: 🐍 设置 Python 环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: ⚙️ 安装依赖
+        run: |
+          pip install akshare pandas pytz numpy
+
+      - name: 🚀 运行股票筛选脚本
+        run: |
+          python stock_scanner_go.py
+
+      - name: 💾 自动同步并提交结果
+        run: |
+          # 1. 配置 Git 基础信息
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git config --global core.quotepath false
+          
+          # 2. 关键步骤：暂存（Stash）新生成的 CSV 文件
+          # 这样工作区就变干净了，可以安全地进行 rebase
+          git add results/**/*.csv
+          git stash
+          
+          # 3. 拉取远程更新并合并
+          git pull origin ${{ github.ref_name }} --rebase
+          
+          # 4. 释放暂存的文件
+          # pop 会将结果文件重新放回 results 文件夹
+          git stash pop || echo "No changes to pop"
+          
+          # 5. 提交并推送
+          git add results/**/*.csv
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "发现新数据，准备提交..."
+            git commit -m "🤖 自动更新极致精选结果: $(date +'%Y-%m-%d %H:%M')"
+            git push origin ${{ github.ref_name }}
+          else
+            echo "没有发现标的变动，跳过本次提交。"
+          fi
