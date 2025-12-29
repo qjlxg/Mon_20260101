@@ -1,16 +1,16 @@
 name: telegram_scraper
 
 on:
-  workflow_dispatch: # 支持手动运行
+  workflow_dispatch:
   push:
     paths:
       - 'telegram_scraper.py'
       - '.github/workflows/telegram_scraper.yml'
   schedule:
-    - cron: '0 0,12 * * *' # 每天北京时间 8:00 和 20:00 自动运行
+    - cron: '30 0,4,8,12,16 * * *' # 每4小时运行一次（北京时间顺延8小时）
 
 jobs:
-  scrape_and_push:
+  scrape_task:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -23,18 +23,35 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+          cache: 'pip'
 
-      - name: 安装依赖
+      - name: 安装系统依赖
         run: |
-          pip install requests beautifulsoup4 easyocr torch torchvision
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-glx libglib2.0-0
+
+      - name: 缓存 OCR 模型
+        uses: actions/cache@v3
+        with:
+          path: ~/.EasyOCR
+          key: ${{ runner.os }}-easyocr-models
+
+      - name: 安装依赖包
+        run: |
+          pip install requests beautifulsoup4 easyocr torch torchvision --extra-index-url https://download.pytorch.org/whl/cpu
 
       - name: 执行抓取脚本
         run: python telegram_scraper.py
 
-      - name: 推送结果到仓库
+      - name: 提交并推送到仓库
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
+          git config --local user.email "bot@github.com"
+          git config --local user.name "ScraperBot"
           git add README.md history/
-          # 只有在有变动时才提交，防止报错
-          git diff --quiet && git diff --staged --quiet || (git commit -m "自动更新: $(date -d '8 hours' +'%Y-%m-%d %H:%M:%S')" && git push)
+          # 检查是否有内容变更，避免空提交
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Auto-sync: $(date -d '8 hours' +'%Y-%m-%d %H:%M')"
+            git push
+          else
+            echo "No changes to commit"
+          fi
