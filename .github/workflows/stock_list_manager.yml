@@ -1,0 +1,35 @@
+name: stock_list_manager
+
+on:
+  push:
+    paths:
+      - 'stock_list_manager.py'
+      - '.github/workflows/stock_list_manager.yml'
+  schedule:
+    - cron: '10 7 * * *' # 每天北京时间 15:10 运行（先更新名单）
+  workflow_dispatch:
+
+jobs:
+  update-list:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # This is important for pushing changes back to the repo
+          token: ${{ secrets.GITHUB_TOKEN }} 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: pip install akshare pandas
+      - name: Run List Manager
+        run: python stock_list_manager.py
+      
+      - name: Git Auto Commit
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "feat(stock): update stock lists from stock_list_manager.py"
+          # Only commit if there are changes in stock_data directory
+          file_pattern: 'stock_data/*.csv' 
+          branch: ${{ github.ref_name }} # Push to the current branch
