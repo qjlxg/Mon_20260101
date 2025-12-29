@@ -7,8 +7,8 @@ on:
       - '.github/workflows/confluence.yml'
       - 'results/**'
   schedule:
-    # 北京时间 16:45 运行（确保 16 战法引擎已跑完）
-    - cron: '45 08 * * *'
+    # 设定在北京时间 17:00 左右运行
+    - cron: '00 09 * * *'
   workflow_dispatch:
 
 permissions:
@@ -31,7 +31,6 @@ jobs:
         run: pip install pandas tabulate
 
       - name: Run Analysis
-        # 即使部分 CSV 为空报错，脚本也会继续运行并产出报告
         run: python confluence_hunter.py
 
       - name: Commit and Push All Changes
@@ -39,24 +38,19 @@ jobs:
           git config --local user.email "bot@github.com"
           git config --local user.name "ConfluenceBot"
           
-          # 确保关键目录存在，防止 add 时报错
-          mkdir -p results reports history
+          # 1. 强制追踪所有新生成的目录（核心修正）
+          git add results/ --force || true
+          git add reports/ --force || true
           
-          # 1. 将所有新产生的结果和报告加入暂存区
-          # 使用强制添加路径的方式，确保 untracked files (如新生成的 reports/) 被追踪
-          git add results/
-          git add reports/
+          # 2. 检查是否有变动 (包括 untracked files)
+          # 使用 -A 参数确保所有变动都被计入
+          git add -A
           
-          # 2. 如果你有特殊的本地文件需要同步，可以取消下面的注释
-          # git add 显示方式.md || true
-
-          # 3. 检查是否有任何变动 (包含新增文件)
           if [ -n "$(git status --porcelain)" ]; then
-            echo "检测到新生成的报告或数据，准备提交..."
-            git commit -m "Auto: 16战法共振分析及复盘报告 $(date +'%Y-%m-%d')"
+            echo "✅ 检测到新报告，准备推送..."
+            git commit -m "Auto: 16战法共振分析 $(date +'%Y-%m-%d')"
             git pull --rebase origin main
             git push origin main
-            echo "✅ 变动已成功推送至仓库。"
           else
-            echo "📭 未发现任何变动，跳过提交步骤。"
+            echo "📭 仓库内容与本地完全一致，无须更新。"
           fi
