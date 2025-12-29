@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          fetch-depth: 1
+          fetch-depth: 1 # 修改为 1 提高效率
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -26,7 +26,7 @@ jobs:
           python-version: '3.9'
 
       - name: Install dependencies
-        run: pip install pandas jinja2 tabulate # 确保支持 MD 表格转换
+        run: pip install pandas tabulate
 
       - name: Run Analysis
         run: python confluence_hunter.py
@@ -36,17 +36,18 @@ jobs:
           git config --local user.email "bot@github.com"
           git config --local user.name "ConfluenceBot"
           
-          # 确保所有目录和新生成的文件都被追踪
-          git add results/*.csv
-          git add history/*.csv
-          git add history/*.md
-          git add history/*.txt
+          # 确保目录存在
+          mkdir -p results history
+          
+          # 关键：使用路径添加，而不是通配符扩展，防止 pathspec 报错
+          git add results/
+          git add history/
           git add 显示方式.md
           
           if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Auto: Daily Backup & Report $(date +'%Y-%m-%d')"
+            git commit -m "Auto: Daily Report & History Backup $(date +'%Y-%m-%d')"
             git pull --rebase origin main
             git push origin main
           else
-            echo "No changes found."
+            echo "No changes found, skipping commit."
           fi
