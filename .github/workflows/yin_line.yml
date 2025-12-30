@@ -1,20 +1,19 @@
-name: Yin_Line_Strategy_Auto
+name: Online_Yin_Final_Pipeline
 
 on:
   push:
     paths:
-      - 'yin_line_logic.py'               # 脚本变动时运行
-      - '.github/workflows/yin_line.yml'  # YML 变动时运行
+      - 'online_yin_final.py'
+      - '.github/workflows/online_yin_final.yml'
   schedule:
-    # 每天北京时间 16:20 运行 (UTC 08:20)
     - cron: '20 08 * * *'
-  workflow_dispatch:                      # 允许手动点击按钮运行
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  run_strategy:
+  execute_strategy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -27,19 +26,20 @@ jobs:
       - name: Install dependencies
         run: pip install pandas numpy
 
-      - name: Execute Yin Logic
-        run: python yin_line_logic.py
+      - name: Run Final Logic
+        run: python online_yin_final.py
 
       - name: Commit and Push Results
         run: |
           git config --local user.email "bot@github.com"
-          git config --local user.name "YinLineBot"
-          mkdir -p results/yin_line_strategy
-          git add results/yin_line_strategy/
-          # 只有在有新文件变动时才 commit，防止空报错
+          git config --local user.name "YinMasterBot"
+          # 关键修复：显式创建并追踪整个 results 目录
+          mkdir -p results/online_yin_final
+          git add -A results/
+          
           if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Auto: 阴线买入信号更新 $(date +'%Y-%m-%d')"
-            git push
+            git commit -m "Auto: 终极精选阴线买报告 $(date +'%Y-%m-%d')"
+            git push origin main
           else
-            echo "No changes detected."
+            echo "No changes found, skipping."
           fi
