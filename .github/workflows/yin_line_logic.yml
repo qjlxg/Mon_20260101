@@ -3,8 +3,8 @@ name: Online_Yin_Final_Pipeline
 on:
   push:
     paths:
-      - 'online_yin_final.py'
-      - '.github/workflows/online_yin_final.yml'
+      - 'yin_line_logic.py'
+      - '.github/workflows/yin_line_logic.yml'
   schedule:
     - cron: '20 08 * * *'
   workflow_dispatch:
@@ -27,7 +27,7 @@ jobs:
         run: pip install pandas numpy
 
       - name: Run Final Logic
-        run: python online_yin_final.py
+        run: python yin_line_logic.py
 
       - name: Commit and Push Results
         run: |
