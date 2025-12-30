@@ -1,16 +1,20 @@
-name: Yin_Line_Strategy_Daily
+name: Yin_Line_Strategy_Auto
 
 on:
+  push:
+    paths:
+      - 'yin_line_logic.py'               # 脚本变动时运行
+      - '.github/workflows/yin_line.yml'  # YML 变动时运行
   schedule:
-    # 北京时间 16:30 运行
-    - cron: '30 08 * * *'
-  workflow_dispatch:
+    # 每天北京时间 16:20 运行 (UTC 08:20)
+    - cron: '20 08 * * *'
+  workflow_dispatch:                      # 允许手动点击按钮运行
 
 permissions:
   contents: write
 
 jobs:
-  scan:
+  run_strategy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -23,15 +27,19 @@ jobs:
       - name: Install dependencies
         run: pip install pandas numpy
 
-      - name: Run Yin Line Logic
+      - name: Execute Yin Logic
         run: python yin_line_logic.py
 
-      - name: Commit Results
+      - name: Commit and Push Results
         run: |
           git config --local user.email "bot@github.com"
           git config --local user.name "YinLineBot"
+          mkdir -p results/yin_line_strategy
           git add results/yin_line_strategy/
+          # 只有在有新文件变动时才 commit，防止空报错
           if [ -n "$(git status --porcelain)" ]; then
-            git commit -m "Auto: 阴线买入战法信号 $(date +'%Y-%m-%d')"
+            git commit -m "Auto: 阴线买入信号更新 $(date +'%Y-%m-%d')"
             git push
+          else
+            echo "No changes detected."
           fi
