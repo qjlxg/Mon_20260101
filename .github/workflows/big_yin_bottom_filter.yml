@@ -1,0 +1,40 @@
+name: big_yin_bottom_filter
+
+on:
+  schedule:
+    - cron: '55 10 * * *' # 北京时间 18:55 运行
+  push:
+    paths:
+      - 'big_yin_bottom_filter.py'
+      - '.github/workflows/big_yin_bottom_filter.yml'
+  workflow_dispatch:
+
+jobs:
+  run_strategy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: pip install pandas numpy
+
+      - name: Execute Big Yin Strategy
+        run: python big_yin_bottom_filter.py
+
+      - name: Push Results
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GoldenPitBot"
+          git add results/
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Big Yin Opportunity: $(date +'%Y-%m-%d %H:%M')"
+            git push
+          else
+            echo "No signals today."
+          fi
