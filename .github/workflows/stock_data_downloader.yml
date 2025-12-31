@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           # 关键点 1: 取消默认的浅克隆，获取完整历史以解决 Diverged 问题
-          fetch-depth: 1 
+          fetch-depth: 0 
 
       - name: Set up Python
         uses: actions/setup-python@v4
