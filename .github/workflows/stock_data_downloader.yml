@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'stock_data_downloader.py'
+      - '.github/workflows/stock_data_downloader.yml'
   schedule:
     - cron: '13 7 * * *' # 北京时间 15:13
   workflow_dispatch:
