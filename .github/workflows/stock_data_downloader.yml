@@ -6,26 +6,29 @@ on:
       - 'stock_data_downloader.py'
       - '.github/workflows/stock_data_downloader.yml'
   schedule:
-    - cron: '13 7 * * *' # 北京时间 15:13
+    - cron: '13 7 * * *' # 北京时间 15:13，每天执行一次
   workflow_dispatch:
 
 jobs:
   download-data:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write   # 必须有 write 权限才能 push
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1  # 关键：浅克隆，极大降低失败概率
-          persist-credentials: true
+          fetch-depth: 0          # 改为完整克隆，便于 rebase
+          persist-credentials: true  # 保留凭证以便后续 pull/push
 
       - name: Configure Git for stability
         run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --global http.postBuffer 524288000
           git config --global core.compression 0
+          git config --global pull.rebase true   # 默认使用 rebase 方式 pull
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -33,7 +36,8 @@ jobs:
           python-version: '3.10'
 
       - name: Install dependencies
-        run: pip install akshare pandas
+        run: |
+          pip install akshare pandas
 
       - name: Run Downloader with Auto-Retry
         run: |
@@ -46,11 +50,23 @@ jobs:
             echo "下载失败，重试第 $ATTEMPTS 次（10秒后）..."
             sleep 10
           done
+          if [ $ATTEMPTS -ge $MAX_ATTEMPTS ]; then
+            echo "达到最大重试次数，下载失败"
+            exit 1
+          fi
+
+      - name: Pull latest changes (避免推送冲突)
+        run: |
+          git pull --rebase origin main
+          # 如果有冲突，这里会失败，Actions 会直接报错，便于及时发现
+          # 股票数据文件一般不会产生实际冲突（都是新增或覆盖），所以基本安全
 
       - name: Git Auto Commit
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "feat(stock): daily update [skip ci]"
-          file_pattern: 'stock_data/*.csv stock_data/*.txt'
-          # 移除 --force，除非必须强制覆盖
-          # push_options: '--force'
+          commit_user_name: github-actions[bot]
+          commit_user_email: 41898282+github-actions[bot]@users.noreply.github.com
+          commit_author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          file_pattern: stock_data/*.csv stock_data/*.txt
+          # 不使用 --force，保持干净历史
