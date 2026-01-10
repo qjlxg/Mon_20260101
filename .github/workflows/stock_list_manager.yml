@@ -6,7 +6,7 @@ on:
       - 'stock_list_manager.py'
       - '.github/workflows/stock_list_manager.yml'
   schedule:
-    - cron: '10 7 * * *' # 每天北京时间 15:10 运行（先更新名单）
+    - cron: '09 7 * * *' 
   workflow_dispatch:
 
 jobs:
