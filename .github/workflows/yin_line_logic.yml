@@ -6,7 +6,7 @@ on:
       - 'yin_line_logic.py'
       - '.github/workflows/yin_line_logic.yml'
   schedule:
-    - cron: '20 08 * * *'
+    - cron: '20 07 * * *'
   workflow_dispatch:
 
 permissions:
