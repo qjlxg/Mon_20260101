@@ -12,7 +12,7 @@ on:
       - '.github/workflows/stock_data_downloader.yml'
   schedule:
     # 每天北京时间 15:19 执行（UTC 时间 7:19）
-    - cron: '19 7 * * *'
+    - cron: '09 7 * * *'
   workflow_dispatch:  # 支持手动触发
 
 jobs:
