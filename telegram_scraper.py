@@ -20,8 +20,8 @@ channels = [
     'zaobaocn',           # 联合早报 - 宏观经济与政经视野
     'hgclhyyb',           # 宏观策略与行研
     'WorldSpotNews',      # 全球要闻速递
-    'Jin10Data',          # 金十数据 - 宏观、外汇、黄金数据首发
-    'ftchinese'           # FT中文网 - 全球商业观点与评论
+    'Jin10Data'           # 金十数据 - 宏观、外汇、黄金数据首发
+    
 ]
 def get_channel_content(channel_name):
     print(f"--- 正在处理: {channel_name} ---")
