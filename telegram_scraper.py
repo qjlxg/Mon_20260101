@@ -12,7 +12,7 @@ try:
 except:
     reader = None
 
-channels = ['FinanceNewsDaily','clsvip','zaobaocn','hgclhyyb','WorldSpotNews','BloombergZh','nowtv_news','kingkitay' ]
+channels = ['kingkitay','FinanceNewsDaily','clsvip','zaobaocn','hgclhyyb','WorldSpotNews' ]
 
 def get_channel_content(channel_name):
     print(f"--- 正在处理: {channel_name} ---")
