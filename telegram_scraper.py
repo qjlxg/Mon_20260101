@@ -14,43 +14,15 @@ except:
 
 # channels = ['kingkitay','FinanceNewsDaily','clsvip','zaobaocn','hgclhyyb','WorldSpotNews' ]
 channels = [
-    # --- 主要内容 ---
     'kingkitay',          # 综合金融资讯与深度分享
     'FinanceNewsDaily',   # 财经日报 - 每日精选
     'clsvip',             # 财联社VIP - 盘中异动与机会解读
     'zaobaocn',           # 联合早报 - 宏观经济与政经视野
     'hgclhyyb',           # 宏观策略与行研
     'WorldSpotNews',      # 全球要闻速递
-
-    # --- 核心快讯与实时新闻 (中文) ---
-    'cls_cn',             # 财联社 - A股/政策实时快讯 (推荐必选)
-    'wallstreetcn',       # 华尔街见闻 - 全球市场实时追踪
     'Jin10Data',          # 金十数据 - 宏观、外汇、黄金数据首发
-    'caixin',             # 财新网 - 深度经济与监管政策
-    'ftchinese',          # FT中文网 - 全球商业观点与评论
-
-    # --- 股票投研与行业研报 (中文) ---
-    'yanbaonews',         # 研报内参 - 汇总券商行业个股深度报告
-    'report_sharing',     # 报告分享 - 宏观、策略、行业PDF资源
-    'zhitongcaijing',     # 智通财经 - 港股/美股中概股权威资讯
-    'gelonghui',          # 格隆汇 - 港美股深度研究频道
-    'meigushe',           # 美股研究社 - 专注美股财报与趋势分析
-
-    # --- ETF、基金与大类资产配置 (中文) ---
-    'etf_strategy',       # ETF 投资策略 - 专注全球 ETF 配置
-    'fund_analysis',      # 基金观察站 - 基金经理动向与持仓分析
-    'AssetAllocation',    # 资产配置研究 - 多资产联动分析
-    'TouZiZhiShuo',       # 投资之说 - 价值投资与深度笔记
-
-    # --- 市场数据与技术分析 (中文) ---
-    'TradingView_CN',     # TradingView 中文官方频道 - 图表与技术分析
-    'OptionFlowCN',       # 衍生品资金流 - 追踪中文环境下的期权异动
-    'MacroVis',           # 宏观视角 - 宏观周期与配置建议
-    'ChinaEquity',        # 核心资产研究 - 侧重 A 股白马股与核心赛道
-    'TigerBroker',        # 老虎证券 - 每日热点与市场解读
-    'FutunnNews'          # 富途牛牛 - 港美股实时动态精选
+    'ftchinese'           # FT中文网 - 全球商业观点与评论
 ]
-
 def get_channel_content(channel_name):
     print(f"--- 正在处理: {channel_name} ---")
     url = f"https://t.me/s/{channel_name}"
