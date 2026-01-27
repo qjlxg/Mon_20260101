@@ -1,0 +1,32 @@
+name: sync_stock_data
+
+on:
+  push:
+    paths:
+      - 'sync_stock_data.py'
+      - '.github/workflows/sync_stock_data.yml'
+  workflow_dispatch: # 允许手动触发
+
+jobs:
+  run-sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Python 环境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 运行同步脚本
+        run: python sync_stock_data.py
+
+      - name: 提交并推送到仓库
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add stock_data/*.csv
+          # 只有在有变动时才提交，防止工作流报错
+          git diff --quiet && git diff --staged --quiet || (git commit -m "自动更新 stock_data 目录下的 CSV 文件" && git push)
