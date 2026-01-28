@@ -44,8 +44,8 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git config --global core.quotepath false
           
-          # 2. 关键步骤：暂存（Stash）新生成的 CSV 文件
-          # 这样工作区就变干净了，可以安全地进行 rebase
+         
+         
           git add results/**/*.csv
           git stash
           
