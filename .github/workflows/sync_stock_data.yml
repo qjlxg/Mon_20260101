@@ -10,6 +10,10 @@ on:
       - '.github/workflows/sync_stock_data.yml'
   workflow_dispatch: # 保持手动触发，方便调试
 
+# 核心：显式授予写入权限，防止 push 失败
+permissions:
+  contents: write
+
 jobs:
   run-sync:
     runs-on: ubuntu-latest
@@ -19,6 +23,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: main_repo
+          # 取消默认的持久化凭据，确保使用最新的权限
+          persist-credentials: true
 
       - name: 检出源数据仓库
         uses: actions/checkout@v4
@@ -32,14 +38,29 @@ jobs:
           python-version: '3.10'
 
       - name: 运行同步脚本
+        # 确保脚本在 main_repo 目录下运行，以便正确访问 stock_data 文件夹
         run: python main_repo/sync_stock_data.py
 
       - name: 提交并推送
         working-directory: ./main_repo
         run: |
+          # 1. 配置 Git 身份
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          # 添加 stock_data 目录下所有 csv 变动
+          
+          # 2. 暂存 stock_data 目录下的所有 csv 变动
+          # 同时包含你在对话背景中提到的 stock_names.csv (如果在根目录)
           git add stock_data/*.csv
-          # 检查是否有变动，有则提交推送
-          git diff --quiet && git diff --staged --quiet || (git commit -m "定时同步股票数据 (北京时间 15:25)" && git push)
+          if [ -f "stock_names.csv" ]; then
+            git add stock_names.csv
+          fi
+          
+          # 3. 检查是否有需要提交的内容
+          # 使用 git status --porcelain 检查是否有未提交的修改
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "检测到数据更新，正在提交..."
+            git commit -m "自动同步股票数据: $(date '+%Y-%m-%d %H:%M:%S') (UTC)"
+            git push
+          else
+            echo "数据未发生变化，跳过提交。"
+          fi
