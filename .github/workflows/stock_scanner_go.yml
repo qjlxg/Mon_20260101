@@ -1,16 +1,16 @@
-name: 🔄 jz
+name: 🔄 极致精选点火版
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:        # 支持手动触发
   push:
     paths:
       - 'stock_scanner_go.py' 
       - '.github/workflows/stock_scanner_go.yml'
   schedule:
-    - cron: '0 10 * * *' 
+    - cron: '30 7 * * *'    # 每天北京时间 15:30 运行 (UTC 7:30)
 
 permissions:
-  contents: write
+  contents: write           # 赋予写入权限
 
 jobs:
   run_scanner:
@@ -25,7 +25,7 @@ jobs:
           fetch-depth: 1 
 
       - name: 🐍 设置 Python 环境
-        uses: actions/setup-python@v5
+        uses: setup-python@v5
         with:
           python-version: '3.10'
 
@@ -33,8 +33,9 @@ jobs:
         run: |
           pip install akshare pandas pytz numpy
 
-      - name: 🚀 运行脚本
+      - name: 🚀 运行点火版脚本
         run: |
+          # 运行你最新的带“点火启动”逻辑的脚本
           python stock_scanner_go.py
 
       - name: 💾 自动同步并提交结果
@@ -44,24 +45,30 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git config --global core.quotepath false
           
-          # 2. 关键步骤：暂存（Stash）新生成的 CSV 文件
-          # 这样工作区就变干净了，可以安全地进行 rebase
-          git add results/**/*.csv
-          git stash
+          # 2. 暂存所有更改（包括新生成的未跟踪 CSV 文件）
+          # -u 参数是解决你之前报错的关键
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "📦 发现新数据，正在进入暂存区..."
+            git add .
+            git stash
+          fi
           
-          # 3. 拉取远程更新并合并
+          # 3. 拉取远程更新，防止多人协作或多次运行冲突
           git pull origin ${{ github.ref_name }} --rebase
           
           # 4. 释放暂存的文件
-          # pop 会将结果文件重新放回 results 文件夹
-          git stash pop || echo "No changes to pop"
+          if git stash list | grep -q "stash@{0}"; then
+            echo "🔓 释放暂存数据..."
+            git stash pop
+          fi
           
           # 5. 提交并推送
-          git add results/**/*.csv
+          # 确保提交的是 results 目录下的最新结果
+          git add results/*.csv
           if [ -n "$(git status --porcelain)" ]; then
-            echo "发现新数据，准备提交..."
-            git commit -m "🤖 自动更新极致精选结果: $(date +'%Y-%m-%d %H:%M')"
+            echo "📝 准备提交更新..."
+            git commit -m "🤖 自动更新极致精选(含点火启动): $(date +'%Y-%m-%d %H:%M')"
             git push origin ${{ github.ref_name }}
           else
-            echo "没有发现标的变动，跳过本次提交。"
+            echo "✅ 本次运行未发现符合条件的标的，无需更新仓库。"
           fi
