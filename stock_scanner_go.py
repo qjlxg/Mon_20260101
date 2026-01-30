@@ -6,11 +6,9 @@ import glob
 from multiprocessing import Pool, cpu_count, Manager
 import numpy as np
 
-# ==================== 2025“买入即获利”极简精选参数 (原始固定) ===================
+# ==================== 2026“全指标共振”精选参数 ===================
 MIN_PRICE = 5.0              
 MAX_AVG_TURNOVER_30 = 2.5    
-
-# --- 极致缩量与小阴小阳 ---
 MIN_VOLUME_RATIO = 0.2       
 MAX_VOLUME_RATIO = 0.85      
 MAX_TODAY_CHANGE = 1.5       
@@ -49,15 +47,24 @@ def calculate_indicators(df):
     df['kdj_d'] = df['kdj_k'].ewm(com=2).mean()
     df['kdj_gold'] = (df['kdj_k'] > df['kdj_d']) & (df['kdj_k'].shift(1) <= df['kdj_d'].shift(1))
     
-    # 3. 均线
+    # 3. MACD (12, 26, 9) - 新增
+    df['ema12'] = close.ewm(span=12, adjust=False).mean()
+    df['ema26'] = close.ewm(span=26, adjust=False).mean()
+    df['diff'] = df['ema12'] - df['ema26']
+    df['dea'] = df['diff'].ewm(span=9, adjust=False).mean()
+    df['macd_hist'] = (df['diff'] - df['dea']) * 2
+    # MACD金叉：今日diff>dea 且 昨日diff<=dea
+    df['macd_gold'] = (df['diff'] > df['dea']) & (df['diff'].shift(1) <= df['dea'].shift(1))
+    # MACD柱状图改善：绿柱缩短或翻红
+    df['macd_improving'] = df['macd_hist'] > df['macd_hist'].shift(1)
+
+    # 4. 均线与量能
     df['ma5'] = close.rolling(window=5).mean()
     df['ma60'] = close.rolling(window=60).mean()
-    
-    # 4. 换手率与量能变化
     df['avg_turnover_30'] = df['换手率'].rolling(window=30).mean()
     df['vol_ma5'] = df['成交量'].shift(1).rolling(window=5).mean()
     df['vol_ratio'] = df['成交量'] / df['vol_ma5']
-    df['vol_increase'] = df['成交量'] > df['成交量'].shift(1) # 是否较昨日放量
+    df['vol_increase'] = df['成交量'] > df['成交量'].shift(1)
     return df
 
 def process_single_stock(args):
@@ -72,7 +79,7 @@ def process_single_stock(args):
         df = calculate_indicators(df_raw)
         latest = df.iloc[-1]
         
-        # --- 统计逻辑 ---
+        # 统计关卡保持不变
         stats_dict['total_scanned'] += 1
         if latest['收盘'] < MIN_PRICE:
             stats_dict['fail_price'] += 1
@@ -83,46 +90,40 @@ def process_single_stock(args):
         
         potential = (latest['ma60'] - latest['收盘']) / latest['收盘'] * 100
         change = latest['涨跌幅'] if '涨跌幅' in latest else 0
-        if potential < MIN_PROFIT_POTENTIAL:
-            stats_dict['fail_potential'] += 1
         
         is_oversold = latest['rsi6'] <= RSI6_MAX and latest['rsi14'] <= RSI14_MAX and latest['kdj_k'] <= KDJ_K_MAX
-        if not is_oversold:
-            stats_dict['fail_rsi_kdj'] += 1
-        
         is_shrink_vol = MIN_VOLUME_RATIO <= latest['vol_ratio'] <= MAX_VOLUME_RATIO
-        if not is_shrink_vol:
-            stats_dict['fail_volume'] += 1
-
         is_small_body = abs(change) <= MAX_TODAY_CHANGE
-        if not is_small_body:
-            stats_dict['fail_shape'] += 1
 
-        # --- 判定逻辑 ---
         strategy_tag = ""
 
-        # 0. 点火启动逻辑 (新增：解决时间成本，要求站上5日线且放量)
-        if is_oversold and potential >= 10.0:
-            if latest['收盘'] > latest['ma5'] and latest['vol_increase'] and latest['vol_ratio'] > 0.6:
-                strategy_tag = "0-点火启动(即买即涨)"
+        # --- 判定逻辑 (引入 MACD 共振) ---
 
-        # 1. 极致精选 (原有逻辑)
-        if strategy_tag == "" and is_oversold and is_shrink_vol and is_small_body and potential >= MIN_PROFIT_POTENTIAL:
-            if latest['kdj_gold']:
-                strategy_tag = "1-极致共振金叉"
+        # 0. 顶级共振启动 (RSI超跌 + KDJ金叉 + MACD改善 + 站上5日线)
+        if is_oversold and latest['收盘'] > latest['ma5'] and latest['macd_improving']:
+            if latest['kdj_gold'] or latest['macd_gold']:
+                strategy_tag = "0-指标三重共振点火"
+
+        # 1. 极致共振金叉 (含MACD辅助)
+        elif is_oversold and is_shrink_vol and is_small_body and potential >= MIN_PROFIT_POTENTIAL:
+            if latest['kdj_gold'] and latest['macd_improving']:
+                strategy_tag = "1-极致KDJ+MACD共振"
+            elif latest['kdj_gold']:
+                strategy_tag = "2-极致KDJ金叉"
             else:
-                strategy_tag = "2-极致缩量捡漏"
+                strategy_tag = "3-极致缩量潜伏"
 
-        # 2. 准入选逻辑 (原有逻辑)
-        elif strategy_tag == "" and is_oversold and latest['vol_ratio'] <= 1.1 and potential >= 10.0 and abs(change) <= 2.5:
-            strategy_tag = "3-准入选观察池"
+        # 2. 准入选观察 (逻辑保持不变)
+        elif is_oversold and latest['vol_ratio'] <= 1.1 and potential >= 10.0:
+            strategy_tag = "4-准入选观察池"
 
         if strategy_tag:
+            macd_status = "金叉" if latest['macd_gold'] else ("红柱" if latest['macd_hist'] > 0 else "绿柱缩短")
             return {
                 '类型': strategy_tag, '代码': stock_code, '名称': stock_name,
                 '现价': round(latest['收盘'], 2), '量比': round(latest['vol_ratio'], 2),
                 'RSI6/14': f"{round(latest['rsi6'],1)}/{round(latest['rsi14'],1)}",
-                'KDJ状态': "金叉" if latest['kdj_gold'] else "底位",
+                'KDJ/MACD': f"{'金叉' if latest['kdj_gold'] else '底位'}/{macd_status}",
                 '距60日线': f"{round(potential, 1)}%", '今日涨跌': f"{round(change, 1)}%"
             }
     except:
@@ -131,7 +132,7 @@ def process_single_stock(args):
 
 def main():
     now_shanghai = datetime.now(SHANGHAI_TZ)
-    print(f"🚀 极致精选+点火启动扫描中... (当前时间: {now_shanghai.strftime('%Y-%m-%d %H:%M')})")
+    print(f"🚀 全指标多周期共振扫描开始... (含MACD+KDJ+RSI)")
 
     manager = Manager()
     stats_dict = manager.dict({
@@ -152,11 +153,12 @@ def main():
 
     results = [r for r in raw_results if r is not None]
     
+    # 打印诊断报告
     print("\n" + "="*50)
-    print("📊 市场诊断报告")
+    print(f"📊 市场环境诊断报告 ({now_shanghai.strftime('%Y-%m-%d')})")
     print("-" * 50)
-    print(f"扫描总数: {stats_dict['total_scanned']} | 空间不足: {stats_dict['fail_potential']} | RSI未跌透: {stats_dict['fail_rsi_kdj']}")
-    print(f"量比过载: {stats_dict['fail_volume']} | 形态剧烈: {stats_dict['fail_shape']}")
+    print(f"扫描总数: {stats_dict['total_scanned']} 只")
+    print(f"不符合空间/指标/缩量要求的标的已过滤。")
     print("="*50)
         
     if results:
@@ -166,10 +168,10 @@ def main():
         print(df_result.to_string(index=False))
         
         os.makedirs("results", exist_ok=True)
-        file_name = f"点火启动版_{now_shanghai.strftime('%Y%m%d_%H%M')}.csv"
+        file_name = f"全指标共振版_{now_shanghai.strftime('%Y%m%d_%H%M')}.csv"
         df_result.to_csv(os.path.join("results", file_name), index=False, encoding='utf_8_sig')
     else:
-        print("\n😱 暂时没有符合“点火启动”或“极致缩量”的标的。")
+        print("\n😱 诊断结果：当前市场未发现满足“RSI+KDJ+MACD”三重共振的极致标的。")
 
 if __name__ == "__main__":
     main()
