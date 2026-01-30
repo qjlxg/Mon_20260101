@@ -12,12 +12,12 @@ MAX_AVG_TURNOVER_30 = 2.5    # 换手率更低，意味着筹码锁定更好
 
 # --- 极致缩量 ---
 MIN_VOLUME_RATIO = 0.2       
-MAX_VOLUME_RATIO = 0.85      # 原始：严格限制在0.85以下
+MAX_VOLUME_RATIO = 1     # 原始：严格限制在0.85以下
 
 # --- 极度超跌 ---
 RSI6_MAX = 25                # 锁定极致超跌区
 KDJ_K_MAX = 30               # 确保K值在底部磨底
-MIN_PROFIT_POTENTIAL = 15    # 要求反弹空间至少15%
+MIN_PROFIT_POTENTIAL = 10    # 要求反弹空间至少15%
 
 # --- 形态与趋势控制 ---
 MAX_TODAY_CHANGE = 1.5       # 原始：拒绝大阳线，只要微涨
