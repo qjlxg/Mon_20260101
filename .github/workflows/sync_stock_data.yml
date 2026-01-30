@@ -3,7 +3,7 @@ name: sync_stock_data
 on:
   schedule:
     # 每天北京时间 15:25 运行 (15-8=7)
-    - cron: '25 7 * * *'
+    - cron: '15 8 * * *'
   push:
     paths:
       - 'sync_stock_data.py'
