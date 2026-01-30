@@ -6,21 +6,21 @@ import glob
 from multiprocessing import Pool, cpu_count
 import numpy as np
 
-# ==================== 2025“买入即获利”极简精选参数 ===================
+# ==================== 2025“买入即获利”极简精选参数 (原始固定) ===================
 MIN_PRICE = 5.0              # 提高股价门槛，过滤低迷小票
 MAX_AVG_TURNOVER_30 = 2.5    # 换手率更低，意味着筹码锁定更好
 
-# --- 极致缩量：锁定统计中胜率100%的区间 ---
+# --- 极致缩量 ---
 MIN_VOLUME_RATIO = 0.2       
-MAX_VOLUME_RATIO = 0.85      # 严格限制在0.85以下，只做缩量洗盘
+MAX_VOLUME_RATIO = 0.85      # 原始：严格限制在0.85以下
 
-# --- 极度超跌：锁定V型反转高发区 ---
+# --- 极度超跌 ---
 RSI6_MAX = 25                # 锁定极致超跌区
 KDJ_K_MAX = 30               # 确保K值在底部磨底
 MIN_PROFIT_POTENTIAL = 15    # 要求反弹空间至少15%
 
 # --- 形态与趋势控制 ---
-MAX_TODAY_CHANGE = 1.5       # 拒绝大阳线拉升后的追高，只选低位横盘或微涨
+MAX_TODAY_CHANGE = 1.5       # 原始：拒绝大阳线，只要微涨
 # =====================================================================
 
 SHANGHAI_TZ = pytz.timezone('Asia/Shanghai')
@@ -61,56 +61,59 @@ def process_single_stock(args):
     stock_code = os.path.basename(file_path).split('.')[0]
     stock_name = name_map.get(stock_code, "未知")
     
-    # --- 自动剔除 ST 股 ---
-    if "ST" in stock_name.upper():
-        return None
+    if "ST" in stock_name.upper(): return None
 
     try:
         df_raw = pd.read_csv(file_path)
         if len(df_raw) < 60: return None
-        
         df = calculate_indicators(df_raw)
         latest = df.iloc[-1]
         
-        # 1. 基础门槛
+        # 基础静态门槛 (公共)
         if latest['收盘'] < MIN_PRICE or latest['avg_turnover_30'] > MAX_AVG_TURNOVER_30:
             return None
         
-        # 2. 空间与涨跌幅控制 (拒绝大涨，只要低吸)
         potential = (latest['ma60'] - latest['收盘']) / latest['收盘'] * 100
         change = latest['涨跌幅'] if '涨跌幅' in latest else 0
-        if potential < MIN_PROFIT_POTENTIAL or change > MAX_TODAY_CHANGE:
-            return None
         
-        # 3. 指标共振：极致超跌
-        if latest['rsi6'] > RSI6_MAX or latest['kdj_k'] > KDJ_K_MAX:
-            return None
-        
-        # 4. 止跌确认：价格必须站在5日线之上（拒绝阴跌）
-        if latest['收盘'] < latest['ma5']:
-            return None
-            
-        # 5. 极致缩量确认
-        if not (MIN_VOLUME_RATIO <= latest['vol_ratio'] <= MAX_VOLUME_RATIO):
-            return None
+        if potential < MIN_PROFIT_POTENTIAL: return None
 
-        return {
-            '代码': stock_code,
-            '名称': stock_name,
-            '最新日期': latest['日期'],
-            '现价': round(latest['收盘'], 2),
-            '今日量比': round(latest['vol_ratio'], 2),
-            'RSI6': round(latest['rsi6'], 1),
-            'K值': round(latest['kdj_k'], 1),
-            '距60日线空间': f"{round(potential, 1)}%",
-            '今日涨跌': f"{round(change, 1)}%"
-        }
+        strategy_tag = ""
+
+        # --- 模式一：极致缩量捡漏 (严格执行你的原始所有参数) ---
+        # 特点：不强求站上MA5，只要跌透了+极度缩量+低位横盘
+        if (latest['rsi6'] <= RSI6_MAX and 
+            latest['kdj_k'] <= KDJ_K_MAX and 
+            MIN_VOLUME_RATIO <= latest['vol_ratio'] <= MAX_VOLUME_RATIO and 
+            abs(change) <= MAX_TODAY_CHANGE):
+            strategy_tag = "极致缩量捡漏"
+
+        # --- 模式二：缩量反转确认 (在你的参数基础上，微调量比上限处理止跌矛盾) ---
+        # 特点：必须站上MA5，允许量比微增至1.0，寻找V型反转第一点
+        elif (latest['rsi6'] <= RSI6_MAX + 5 and  # 稍微放宽RSI确认企稳
+              latest['kdj_k'] <= KDJ_K_MAX + 5 and
+              latest['收盘'] > latest['ma5'] and     # 核心差异：必须站上5日线
+              0.5 <= latest['vol_ratio'] <= 1.0 and   # 核心差异：量比允许微升到1.0
+              0 < change <= MAX_TODAY_CHANGE + 1.0): # 核心差异：涨幅放宽到2.5%
+            strategy_tag = "缩量反转确认"
+
+        if strategy_tag:
+            return {
+                '类型': strategy_tag,
+                '代码': stock_code,
+                '名称': stock_name,
+                '现价': round(latest['收盘'], 2),
+                '今日量比': round(latest['vol_ratio'], 2),
+                'RSI6': round(latest['rsi6'], 1),
+                '距60日线': f"{round(potential, 1)}%",
+                '今日涨跌': f"{round(change, 1)}%"
+            }
     except:
         return None
 
 def main():
     now_shanghai = datetime.now(SHANGHAI_TZ)
-    print(f"🚀 极致缩量精选扫描开始... 目标：高胜率低吸")
+    print(f"🚀 双模式精选扫描中... (保留原始参数 + 兼容反转逻辑)")
 
     name_map = {}
     if os.path.exists(NAME_MAP_FILE):
@@ -118,7 +121,7 @@ def main():
         name_map = dict(zip(n_df['code'].str.zfill(6), n_df['name']))
 
     file_list = glob.glob(os.path.join(STOCK_DATA_DIR, '*.csv'))
-    tasks = [(file_path, name_map) for file_path in file_list]
+    tasks = [(f, name_map) for f in file_list]
 
     with Pool(processes=cpu_count()) as pool:
         raw_results = pool.map(process_single_stock, tasks)
@@ -127,22 +130,17 @@ def main():
         
     if results:
         df_result = pd.DataFrame(results)
-        # 排序：量比越小越优先（符合统计最高胜率逻辑）
-        df_result = df_result.sort_values(by='今日量比', ascending=True)
+        # 排序：先看类型，再看空间
+        df_result = df_result.sort_values(by=['类型', '距60日线'], ascending=[True, False])
         
-        print(f"\n🎯 经过【胜率看板】优化，仅筛选出 {len(results)} 只极品标的:")
-        print(df_result.to_string(index=False)) 
+        print(f"\n🎯 筛选出 {len(results)} 只标的：")
+        print(df_result.to_string(index=False))
         
-        date_str = now_shanghai.strftime('%Y%m%d_%H%M%S')
-        year_month = now_shanghai.strftime('%Y/%m')
-        save_path = f"results/{year_month}"
-        os.makedirs(save_path, exist_ok=True)
-        
-        file_name = f"极致精选_轮动_{date_str}.csv"
-        df_result.to_csv(os.path.join(save_path, file_name), index=False, encoding='utf_8_sig')
-        print(f"\n✅ 极精选报告已保存。")
+        os.makedirs("results", exist_ok=True)
+        file_name = f"双模式精选_{now_shanghai.strftime('%Y%m%d_%H%M')}.csv"
+        df_result.to_csv(os.path.join("results", file_name), index=False, encoding='utf_8_sig')
     else:
-        print("\n😱 暂无符合极致缩量且超跌止跌的标的，耐心等待是最高级的策略。")
+        print("\n😱 暂时没有符合要求的极品标的。")
 
 if __name__ == "__main__":
     main()
