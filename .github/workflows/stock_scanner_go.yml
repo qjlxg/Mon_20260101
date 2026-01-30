@@ -7,10 +7,10 @@ on:
       - 'stock_scanner_go.py' 
       - '.github/workflows/stock_scanner_go.yml'
   schedule:
-    - cron: '30 7 * * *'    # 每天北京时间 15:30 运行 (UTC 7:30)
+    - cron: '38 7 * * *'    # 每天北京时间 15:30 运行 (UTC 7:30)
 
 permissions:
-  contents: write           # 赋予写入权限
+  contents: write           # 核心：必须赋予写入权限
 
 jobs:
   run_scanner:
@@ -25,7 +25,7 @@ jobs:
           fetch-depth: 1 
 
       - name: 🐍 设置 Python 环境
-        uses: setup-python@v5
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
@@ -45,30 +45,29 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git config --global core.quotepath false
           
-          # 2. 暂存所有更改（包括新生成的未跟踪 CSV 文件）
-          # -u 参数是解决你之前报错的关键
+          # 2. 暂存所有更改（解决你之前报错的关键：先 add 再 stash）
           if [ -n "$(git status --porcelain)" ]; then
-            echo "📦 发现新数据，正在进入暂存区..."
+            echo "📦 发现新生成的 CSV 数据，正在进入暂存区..."
             git add .
             git stash
           fi
           
-          # 3. 拉取远程更新，防止多人协作或多次运行冲突
+          # 3. 拉取远程更新，防止多人协作或多次运行导致的 Push 失败
           git pull origin ${{ github.ref_name }} --rebase
           
           # 4. 释放暂存的文件
           if git stash list | grep -q "stash@{0}"; then
-            echo "🔓 释放暂存数据..."
+            echo "🔓 释放暂存数据到当前工作区..."
             git stash pop
           fi
           
           # 5. 提交并推送
-          # 确保提交的是 results 目录下的最新结果
+          # 重新 add 确保新生成的 results 被包含
           git add results/*.csv
           if [ -n "$(git status --porcelain)" ]; then
             echo "📝 准备提交更新..."
             git commit -m "🤖 自动更新极致精选(含点火启动): $(date +'%Y-%m-%d %H:%M')"
             git push origin ${{ github.ref_name }}
           else
-            echo "✅ 本次运行未发现符合条件的标的，无需更新仓库。"
+            echo "✅ 本次运行未发现标的变动，无需更新仓库。"
           fi
