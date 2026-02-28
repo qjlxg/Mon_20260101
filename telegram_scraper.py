@@ -14,13 +14,14 @@ except:
 
 # channels = ['kingkitay','FinanceNewsDaily','clsvip','zaobaocn','hgclhyyb','WorldSpotNews' ]
 channels = [
+    'Jin10Data',           # 金十数据 - 宏观、外汇、黄金数据首发
     'kingkitay',          # 综合金融资讯与深度分享
     'FinanceNewsDaily',   # 财经日报 - 每日精选
     'clsvip',             # 财联社VIP - 盘中异动与机会解读
     'zaobaocn',           # 联合早报 - 宏观经济与政经视野
     'hgclhyyb',           # 宏观策略与行研
-    'WorldSpotNews',      # 全球要闻速递
-    'Jin10Data'           # 金十数据 - 宏观、外汇、黄金数据首发
+    'WorldSpotNews'       # 全球要闻速递
+    
     
 ]
 def get_channel_content(channel_name):
