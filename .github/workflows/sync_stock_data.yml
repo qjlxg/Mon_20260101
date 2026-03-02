@@ -2,13 +2,12 @@ name: sync_stock_data
 
 on:
   schedule:
-    # 每天北京时间 15:25 运行 (15-8=7)
-    - cron: '15 8 * * *'
+    - cron: '5 8 * * *'
   push:
     paths:
       - 'sync_stock_data.py'
       - '.github/workflows/sync_stock_data.yml'
-  workflow_dispatch: # 保持手动触发，方便调试
+  workflow_dispatch: 
 
 jobs:
   run-sync:
@@ -19,11 +18,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: main_repo
+          # 必须设置为 0 才能推送回原仓库
+          token: ${{ secrets.GITHUB_TOKEN }} 
 
       - name: 检出源数据仓库
         uses: actions/checkout@v4
         with:
-          repository: qjlxg/4.0  # 确保此仓库名正确
+          repository: qjlxg/4.0
           path: source_repo
 
       - name: 设置 Python
@@ -39,7 +40,14 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          # 添加 stock_data 目录下所有 csv 变动
-          git add stock_data/*.csv
-          # 检查是否有变动，有则提交推送
-          git diff --quiet && git diff --staged --quiet || (git commit -m "定时同步股票数据 (北京时间 15:25)" && git push)
+          
+          # 【重要修改】使用 -A 处理所有变动，包括文件删除
+          git add -A stock_data/
+          
+          # 检查暂存区是否有内容需要提交
+          if git diff --staged --quiet; then
+            echo "没有检测到任何数据变化，跳过提交。"
+          else
+            git commit -m "定时同步：自动清理旧 CSV 并更新数据"
+            git push
+          fi
