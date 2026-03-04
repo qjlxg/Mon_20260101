@@ -2,7 +2,7 @@ name: sync_stock_data
 
 on:
   schedule:
-    - cron: '5 8 * * *'
+    - cron: 0 * * * *
   push:
     paths:
       - 'sync_stock_data.py'
@@ -18,7 +18,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: main_repo
-          # 必须设置为 0 才能推送回原仓库
+         
           token: ${{ secrets.GITHUB_TOKEN }} 
 
       - name: 检出源数据仓库
@@ -41,7 +41,7 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
-          # 【重要修改】使用 -A 处理所有变动，包括文件删除
+        
           git add -A stock_data/
           
           # 检查暂存区是否有内容需要提交
