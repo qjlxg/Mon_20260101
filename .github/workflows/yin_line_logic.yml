@@ -1,0 +1,45 @@
+name: Online_Yin_Final_Pipeline
+
+on:
+  push:
+    paths:
+      - 'yin_line_logic.py'
+      - '.github/workflows/yin_line_logic.yml'
+  schedule:
+    - cron: '20 07 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  execute_strategy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install pandas numpy
+
+      - name: Run Final Logic
+        run: python yin_line_logic.py
+
+      - name: Commit and Push Results
+        run: |
+          git config --local user.email "bot@github.com"
+          git config --local user.name "YinMasterBot"
+          # 关键修复：显式创建并追踪整个 results 目录
+          mkdir -p results/online_yin_final
+          git add -A results/
+          
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Auto: 终极精选阴线买报告 $(date +'%Y-%m-%d')"
+            git push origin main
+          else
+            echo "No changes found, skipping."
+          fi

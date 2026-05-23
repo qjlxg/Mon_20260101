@@ -1,0 +1,51 @@
+name: Strategy_MACDWater
+on:
+  push:
+    paths:
+      - 'macd_water_float.py'
+      - '.github/workflows/macd_water.yml'
+  schedule:
+    - cron: '12 08 * * *' # 北京时间 16:12 执行
+  workflow_dispatch: # 支持手动点击运行
+
+permissions:
+  contents: write
+
+jobs:
+  run_strategy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          # fetch-depth: 0 确保获取完整历史，以便 rebase 成功
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install pandas
+
+      - name: Execute Script
+        run: python macd_water_float.py
+
+      - name: Commit and Push Results
+        run: |
+          git config --local user.email "bot@github.com"
+          git config --local user.name "StrategyBot"
+          git add results/
+          
+          # 只有当 results 文件夹有变化时才执行提交
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Auto-update: MACDWater Results $(date +'%Y-%m-%d')"
+            
+            # 【核心修正】先拉取远程更新并变基，解决并发冲突
+            git pull --rebase origin main
+            
+            git push origin main
+          else
+            echo "No changes detected in results, skipping push."
+          fi
