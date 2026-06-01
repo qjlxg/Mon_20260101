@@ -1,0 +1,53 @@
+name: sync_stock_data
+
+on:
+  schedule:
+    - cron: 0 * * * *
+  push:
+    paths:
+      - 'sync_stock_data.py'
+      - '.github/workflows/sync_stock_data.yml'
+  workflow_dispatch: 
+
+jobs:
+  run-sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出当前仓库 (目标)
+        uses: actions/checkout@v4
+        with:
+          path: main_repo
+         
+          token: ${{ secrets.GITHUB_TOKEN }} 
+
+      - name: 检出源数据仓库
+        uses: actions/checkout@v4
+        with:
+          repository: qjlxg/4.0
+          path: source_repo
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 运行同步脚本
+        run: python main_repo/sync_stock_data.py
+
+      - name: 提交并推送
+        working-directory: ./main_repo
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+        
+          git add -A stock_data/
+          
+          # 检查暂存区是否有内容需要提交
+          if git diff --staged --quiet; then
+            echo "没有检测到任何数据变化，跳过提交。"
+          else
+            git commit -m "定时同步：自动清理旧 CSV 并更新数据"
+            git push
+          fi
