@@ -1,0 +1,34 @@
+name: Strategy_OneSun
+on:
+  push:
+    paths:
+      - 'one_sun_three_lines.py'
+      - '.github/workflows/one_sun.yml'
+  schedule:
+    - cron: '15 08 * * *' # UTC 08:15 = 北京时间 16:15
+  workflow_dispatch: # 支持手动运行
+
+permissions:
+  contents: write
+
+jobs:
+  run_strategy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - run: pip install pandas
+      - name: Execute Script
+        run: python one_sun_three_lines.py
+      - name: Commit and Push
+        run: |
+          git config --local user.email "bot@github.com"
+          git config --local user.name "StrategyBot"
+          git add results/
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Auto-update: OneSun Results $(date +'%Y-%m-%d')"
+            git push
+          fi

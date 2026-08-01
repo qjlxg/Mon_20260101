@@ -1,0 +1,40 @@
+name: geshan_daniu_filter
+
+on:
+  schedule:
+    - cron: '30 11 * * *' # 北京时间 19:30 运行
+  push:
+    paths:
+      - 'geshan_daniu_filter.py'
+      - '.github/workflows/geshan_daniu_filter.yml'
+  workflow_dispatch:
+
+jobs:
+  run_strategy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: pip install pandas numpy
+
+      - name: Execute Strategy
+        run: python geshan_daniu_filter.py
+
+      - name: Push Results
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "DaniuBot"
+          git add results/
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Geshan Daniu Update: $(date +'%Y-%m-%d %H:%M')"
+            git push
+          else
+            echo "No signals found."
+          fi

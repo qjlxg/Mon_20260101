@@ -1,0 +1,40 @@
+name: limit_up_squad_filter
+
+on:
+  schedule:
+    - cron: '15 10 * * *' # 北京时间 18:15 运行
+  push:
+    paths:
+      - 'limit_up_squad_filter.py'
+      - '.github/workflows/limit_up_squad_filter.yml'
+  workflow_dispatch:
+
+jobs:
+  run_strategy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: pip install pandas numpy
+
+      - name: Execute Limit Up Strategy
+        run: python limit_up_squad_filter.py
+
+      - name: Push Results
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "LimitUpBot"
+          git add results/
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Limit Up Squad Update: $(date +'%Y-%m-%d %H:%M')"
+            git push
+          else
+            echo "No targets found today."
+          fi
