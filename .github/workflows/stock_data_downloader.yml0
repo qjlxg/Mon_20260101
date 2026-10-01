@@ -1,0 +1,88 @@
+name: stock_data_downloader
+
+# 并发控制：同一时间只允许一个 workflow 运行，避免多个定时任务并发导致冲突
+concurrency:
+  group: stock-data-update
+  cancel-in-progress: true
+
+on:
+  push:
+    paths:
+      - 'stock_data_downloader.py'
+      - '.github/workflows/stock_data_downloader.yml'
+  schedule:
+    # 每天北京时间 15:19 执行（UTC 时间 7:19）
+    - cron: '09 7 * * *'
+  workflow_dispatch:  # 支持手动触发
+
+jobs:
+  download-data:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # 需要写权限才能推送 commit
+
+    steps:
+      - name: Checkout Code with Retry
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1          # 浅克隆，加快 checkout 速度并降低失败率
+          persist-credentials: true
+          # 自动重试 checkout（最多 3 次，每次间隔 20 秒）
+          retry: true
+          retry-max-attempts: 3
+          retry-wait-seconds: 20
+
+      - name: Configure Git for stability
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # 增大缓冲区，防止大文件推送失败
+          git config --global http.postBuffer 524288000
+          git config --global http.lowSpeedLimit 0
+          git config --global http.lowSpeedTime 999999
+          git config --global core.compression 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install akshare pandas
+
+      - name: Run Downloader with Auto-Retry
+        run: |
+          mkdir -p stock_data
+          ATTEMPTS=0
+          MAX_ATTEMPTS=20
+          until [ $ATTEMPTS -ge $MAX_ATTEMPTS ]; do
+            if python stock_data_downloader.py; then
+              echo "🎉 本轮下载任务顺利执行完毕。"
+              break
+            else
+              ATTEMPTS=$((ATTEMPTS+1))
+              echo "下载失败，重试第 $ATTEMPTS 次（10秒后）..."
+              sleep 10
+            fi
+          done
+          if [ $ATTEMPTS -ge $MAX_ATTEMPTS ]; then
+            echo "达到最大重试次数，下载失败"
+            exit 1
+          fi
+
+      # 关键修复：使用 --autostash 自动处理本地新生成的文件
+      - name: Sync latest changes before commit (避免推送冲突)
+        run: |
+          git pull --rebase --autostash origin main
+
+      - name: Git Auto Commit
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "feat(stock): daily update [skip ci]"
+          commit_user_name: "github-actions[bot]"
+          commit_user_email: "41898282+github-actions[bot]@users.noreply.github.com"
+          commit_author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+          file_pattern: stock_data/*.csv stock_data/*.txt
+          skip_dirty_check: false   # 默认 false，确保有改动才 commit
+          # [skip ci] 会阻止再次触发 workflow，避免无限循环

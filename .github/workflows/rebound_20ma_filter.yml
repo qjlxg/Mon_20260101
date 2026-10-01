@@ -1,0 +1,40 @@
+name: rebound_20ma_filter
+
+on:
+  schedule:
+    - cron: '45 10 * * *' # 北京时间 18:45 运行
+  push:
+    paths:
+      - 'limit_up_rebound_20ma.py'
+      - '.github/workflows/rebound_20ma_filter.yml'
+  workflow_dispatch:
+
+jobs:
+  run_strategy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: pip install pandas numpy
+
+      - name: Execute Rebound Strategy
+        run: python limit_up_rebound_20ma.py
+
+      - name: Push Results
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "ReboundBot"
+          git add results/
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Rebound 20MA Pick: $(date +'%Y-%m-%d %H:%M')"
+            git push
+          else
+            echo "No signals found."
+          fi
