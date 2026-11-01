@@ -1,0 +1,40 @@
+name: consecutive_sun_filter
+
+on:
+  schedule:
+    - cron: '45 9 * * *' # 北京时间 17:45 运行
+  push:
+    paths:
+      - 'consecutive_sun_filter.py'
+      - '.github/workflows/consecutive_sun_filter.yml'
+  workflow_dispatch:
+
+jobs:
+  run_strategy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: pip install pandas numpy
+
+      - name: Execute Consecutive Sun Strategy
+        run: python consecutive_sun_filter.py
+
+      - name: Commit and Push Results
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "StrategyBot"
+          git add results/
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Consecutive Sun Pick: $(date +'%Y-%m-%d %H:%M')"
+            git push
+          else
+            echo "No targets found today."
+          fi

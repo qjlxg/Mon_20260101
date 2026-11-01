@@ -1,0 +1,56 @@
+name: Strategy_Confluence
+
+on:
+  push:
+    paths:
+      - 'confluence_hunter.py'
+      - '.github/workflows/confluence.yml'
+      - 'results/**'
+  schedule:
+    # 设定在北京时间 17:00 左右运行
+    - cron: '00 09 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run_analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install pandas tabulate
+
+      - name: Run Analysis
+        run: python confluence_hunter.py
+
+      - name: Commit and Push All Changes
+        run: |
+          git config --local user.email "bot@github.com"
+          git config --local user.name "ConfluenceBot"
+          
+          # 1. 强制追踪所有新生成的目录（核心修正）
+          git add results/ --force || true
+          git add reports/ --force || true
+          
+          # 2. 检查是否有变动 (包括 untracked files)
+          # 使用 -A 参数确保所有变动都被计入
+          git add -A
+          
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "✅ 检测到新报告，准备推送..."
+            git commit -m "Auto: 16战法共振分析 $(date +'%Y-%m-%d')"
+            git pull --rebase origin main
+            git push origin main
+          else
+            echo "📭 仓库内容与本地完全一致，无须更新。"
+          fi

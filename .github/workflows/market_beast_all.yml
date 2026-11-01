@@ -1,0 +1,60 @@
+name: Market_Beast_All_Strategies
+
+on:
+  push:
+    paths:
+      - 'market_beast_engine.py'
+      - '.github/workflows/market_beast_all.yml'
+  schedule:
+    # 这里的 cron 是 UTC 时间。上海时间 (UTC+8) 下午 15:45 运行。
+    # 07:45 UTC = 15:45 北京时间
+    - cron: '45 07 * * *'
+  workflow_dispatch: # 支持手动点击运行
+
+jobs:
+  run_all_strategies:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1 # 获取完整历史以确保 push 顺畅
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Dependencies
+        run: |
+          pip install pandas
+
+      - name: Run Market Beast Engine
+        run: |
+          # 确保所有结果文件夹存在
+          mkdir -p results/macd_bottom results/duck_head results/three_in_one \
+                   results/pregnancy_line results/single_yang results/limit_pullback \
+                   results/golden_pit results/grass_fly results/limit_break \
+                   results/double_plate results/horse_back results/hot_money \
+                   results/wave_bottom results/no_loss results/chase_rise results/inst_swing
+          
+          # 执行核心引擎
+          python market_beast_engine.py
+
+      - name: Commit and Push Changes
+        run: |
+          git config --local user.email "market_beast_bot@github.com"
+          git config --local user.name "MarketBeastBot"
+          
+          # 关键：将 results 目录下所有 16 个子文件夹的变化全部加入
+          git add results/
+          
+          # 只有在有文件变动时才提交
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Auto: 每日16战法选股更新 $(date +'%Y-%m-%d %H:%M:%S')"
+            git pull --rebase origin main
+            git push origin main
+          else
+            echo "今日战法未选出符合条件的股票，无需更新。"
+          fi

@@ -1,0 +1,42 @@
+name: telegram_scraper
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'telegram_scraper.py'
+      - '.github/workflows/telegram_scraper.yml'
+  schedule:
+    - cron: '0 0,4,8,12,16 * * *'
+
+jobs:
+  run_scraper:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          # 修复点：改用 libgl1 并添加更多图形支撑库
+          sudo apt-get install -y libgl1 libglib2.0-0 libsm6 libxext6 libxrender1
+          pip install requests beautifulsoup4 easyocr torch torchvision --extra-index-url https://download.pytorch.org/whl/cpu
+
+      - name: Run Scraper
+        run: python telegram_scraper.py
+
+      - name: Commit and Push
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "Bot"
+          git add README.md history/
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Auto Update $(date -d '8 hours' +'%Y-%m-%d %H:%M')" && git push)
